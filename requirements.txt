@@ -1,0 +1,7 @@
+edgartools
+chromadb
+sentence-transformers
+streamlit
+ollama
+psycopg2-binary
+python-dotenv
