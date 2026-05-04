@@ -1,3 +1,10 @@
+"""
+Pipeline config: company aliases for query matching. 
+
+Target tickers and filing types for ingestion, and section mappings extracting content from 10-K and 10-Q filings. 
+"""
+
+
 COMPANY_ALIASES = {
     # Tech
     "apple": "AAPL",
@@ -94,6 +101,6 @@ TENK_SECTION_MAP = {
 }
 
 TENQ_SECTION_MAP = {
-    "Risk Factors": "Part II, Item 1A",
-    "Management's Discussion and Analysis": "Part I, Item 2",
+    "Risk Factors": ["Part II, Item 1A", "Item 1A"],
+    "Management's Discussion and Analysis": ["Part I, Item 2", "Item 2"],
 }

@@ -1,3 +1,10 @@
+"""
+Postgres connection and schema setup for structured financial data. 
+
+Defines tables for companies,filings, and XBRL-sourced financial metrics, used alongside the vector store
+"""
+
+
 import os
 import psycopg2
 from dotenv import load_dotenv
@@ -6,12 +13,11 @@ load_dotenv()
 
 DB_CONFIG = {
     "dbname": "sec_rag",
-    "user": "postgres",
-    "password": os.getenv("DB_PASSWORD"),
+    "user": "jinghansun",
+    "password": "",
     "host": "localhost",
     "port": 5432,
 }
-
 
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)

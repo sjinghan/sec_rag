@@ -1,3 +1,11 @@
+"""
+Streamlit interface for the pipeline
+
+Able to take a natural language query, runs it through the retrieval and generation pipeline, and able to displaky the answer with source citations. 
+"""
+
+
+
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
