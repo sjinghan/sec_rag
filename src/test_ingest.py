@@ -1,5 +1,6 @@
 from edgar import set_identity, Company
-from src.ingest import get_section_text, chunk_section, embed_text
+import ollama
+from src.ingest import EMBEDDING_MODEL, get_section_text, chunk_text
 from src.config import TARGET_SECTIONS
 
 set_identity("YourName your.email@example.com")
@@ -16,7 +17,7 @@ def test():
         if not text:
             print(f"  {section}: NOT FOUND")
             continue
-        chunks = chunk_section(text, section)
+        chunks = chunk_text(text)
         print(f"  {section}: {len(text)} chars, {len(chunks)} chunks")
 
     print("\n=== Testing 10-Q (Apple) ===")
@@ -29,13 +30,13 @@ def test():
         if not text:
             print(f"  {section}: NOT FOUND")
             continue
-        chunks = chunk_section(text, section)
+        chunks = chunk_text(text)
         print(f"  {section}: {len(text)} chars, {len(chunks)} chunks")
 
     print("\nEmbed test...")
     text = get_section_text(Company("AAPL").get_filings(form="10-K")[0].obj(), "Risk Factors", "10-K")
-    chunks = chunk_section(text, "Risk Factors")
-    emb = embed_text(chunks[0])
+    chunks = chunk_text(text)
+    emb = ollama.embed(model=EMBEDDING_MODEL, input=chunks[0])["embeddings"][0]
     print(f"  Embedding dimension: {len(emb)}")
     print("\nAll tests passed.")
 

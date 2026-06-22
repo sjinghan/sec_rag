@@ -199,6 +199,7 @@ def run_extraction():
 
                 for m in metrics:
                     try:
+                        cur.execute("SAVEPOINT metric_insert")
                         cur.execute(
                             """INSERT INTO financial_metrics
                                (filing_id, ticker, fiscal_period_end, metric_name, xbrl_concept, value, unit, period_type)
@@ -208,8 +209,11 @@ def run_extraction():
                             (filing_id, ticker, m["fiscal_period_end"], m["metric_name"],
                              m["xbrl_concept"], m["value"], m["unit"], m["period_type"])
                         )
+                        cur.execute("RELEASE SAVEPOINT metric_insert")
                         total_metrics += 1
                     except Exception as e:
+                        cur.execute("ROLLBACK TO SAVEPOINT metric_insert")
+                        cur.execute("RELEASE SAVEPOINT metric_insert")
                         print(f"    ERROR storing metric {m['metric_name']}: {e}")
 
                 conn.commit()
