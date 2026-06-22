@@ -1,3 +1,4 @@
+import re
 from edgar import set_identity, Company
 from src.database import get_connection
 from src.config import TARGET_TICKERS, FILING_TYPES, YEARS_BACK
@@ -61,13 +62,23 @@ def get_statement(financials, statement_name):
         return None
 
 
-def extract_metrics_from_filing(filing_obj):
+def extract_metrics_from_filing(filing_obj, period_type):
     financials = filing_obj.financials
     if not financials:
         return []
 
+    # For quarterly filings, only extract balance sheet metrics.
+    # Income statement and cash flow columns in a 10-Q represent the partial
+    # period (e.g. 3-month Q3 revenue), which XBRL also reports alongside a
+    # YTD figure under the same end date — we can't distinguish them from the
+    # flattened dataframe, so we skip them entirely for 10-Qs.
+    if period_type == "quarterly":
+        statements_to_load = ["balance_sheet"]
+    else:
+        statements_to_load = ["income_statement", "balance_sheet", "cash_flow_statement"]
+
     statements = {}
-    for statement_name in ["income_statement", "balance_sheet", "cash_flow_statement"]:
+    for statement_name in statements_to_load:
         stmt = get_statement(financials, statement_name)
         if stmt:
             try:
@@ -103,6 +114,11 @@ def extract_metrics_from_filing(filing_obj):
                 except (ValueError, TypeError):
                     continue
 
+                date_match = re.match(r'\d{4}-\d{2}-\d{2}', period)
+                if not date_match:
+                    continue
+                clean_date = date_match.group(0)
+
                 unit = "USD"
                 if "per_share" in metric_name or "eps" in metric_name:
                     unit = "USD/share"
@@ -110,9 +126,10 @@ def extract_metrics_from_filing(filing_obj):
                 results.append({
                     "metric_name": metric_name,
                     "xbrl_concept": config["concept"],
-                    "fiscal_period_end": period,
+                    "fiscal_period_end": clean_date,
                     "value": value,
                     "unit": unit,
+                    "period_type": period_type,
                 })
 
     return results
@@ -176,19 +193,20 @@ def run_extraction():
                 )
                 filing_id = cur.fetchone()[0]
 
-                metrics = extract_metrics_from_filing(filing_obj)
-                print(f"    Extracted {len(metrics)} metric values")
+                period_type = "annual" if filing_type == "10-K" else "quarterly"
+                metrics = extract_metrics_from_filing(filing_obj, period_type)
+                print(f"    Extracted {len(metrics)} metric values ({period_type})")
 
                 for m in metrics:
                     try:
                         cur.execute(
                             """INSERT INTO financial_metrics
-                               (filing_id, ticker, fiscal_period_end, metric_name, xbrl_concept, value, unit)
-                               VALUES (%s, %s, %s, %s, %s, %s, %s)
-                               ON CONFLICT (filing_id, metric_name, fiscal_period_end) DO UPDATE
+                               (filing_id, ticker, fiscal_period_end, metric_name, xbrl_concept, value, unit, period_type)
+                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                               ON CONFLICT (filing_id, metric_name, fiscal_period_end, period_type) DO UPDATE
                                SET value = EXCLUDED.value""",
                             (filing_id, ticker, m["fiscal_period_end"], m["metric_name"],
-                             m["xbrl_concept"], m["value"], m["unit"])
+                             m["xbrl_concept"], m["value"], m["unit"], m["period_type"])
                         )
                         total_metrics += 1
                     except Exception as e:

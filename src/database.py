@@ -59,7 +59,8 @@ def create_tables():
             xbrl_concept VARCHAR(255) NOT NULL,
             value NUMERIC,
             unit VARCHAR(50),
-            UNIQUE(filing_id, metric_name, fiscal_period_end)
+            period_type VARCHAR(10) NOT NULL,
+            UNIQUE(filing_id, metric_name, fiscal_period_end, period_type)
         );
     """)
 
@@ -77,5 +78,31 @@ def create_tables():
     print("Tables created successfully.")
 
 
+def migrate():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("ALTER TABLE financial_metrics ADD COLUMN IF NOT EXISTS period_type VARCHAR(10)")
+
+    cur.execute("""
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'financial_metrics'::regclass AND contype = 'u'
+    """)
+    for (name,) in cur.fetchall():
+        cur.execute(f"ALTER TABLE financial_metrics DROP CONSTRAINT {name}")
+
+    cur.execute("""
+        ALTER TABLE financial_metrics
+        ADD CONSTRAINT financial_metrics_unique
+        UNIQUE (filing_id, metric_name, fiscal_period_end, period_type)
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("Migration complete.")
+
+
 if __name__ == "__main__":
     create_tables()
+    migrate()

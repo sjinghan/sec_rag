@@ -15,6 +15,8 @@ EMBEDDING_MODEL = "nomic-embed-text"
 GENERATION_MODEL = "llama3:8b-instruct-q4_0"
 TOP_K = 5
 
+BALANCE_SHEET_METRICS = {"total_assets", "total_liabilities", "shareholders_equity", "cash"}
+
 METRIC_KEYWORDS = {
     "revenue": ["revenue", "sales", "top line"],
     "net_income": ["net income", "net profit", "bottom line", "earnings"],
@@ -64,24 +66,43 @@ def detect_metric(query):
 
 # Data retrieval
 
-def query_financials(ticker, metric_name, year=None):
-    # Look up a structured financial metric
-    # returns the most recent match, optionally filtered by fiscal year
+def query_financials(ticker, metric_name, year=None, period_type="annual"):
+    # Look up a structured financial metric.
+    # Balance sheet metrics ignore period_type — the most recent point-in-time
+    # value is always preferred regardless of whether it came from a 10-K or 10-Q.
+    if metric_name in BALANCE_SHEET_METRICS:
+        period_type = None
+
     conn = get_connection()
     cur = conn.cursor()
- 
+
     sql = """
-        SELECT fiscal_period_end, value, unit
+        SELECT fiscal_period_end, value, unit, period_type
         FROM financial_metrics
         WHERE ticker = %s AND metric_name = %s
     """
     params = [ticker, metric_name]
- 
+
     if year:
         sql += " AND EXTRACT(YEAR FROM fiscal_period_end) = %s"
         params.append(int(year))
- 
-    sql += " ORDER BY fiscal_period_end DESC LIMIT 1"
+
+    if period_type:
+        sql += " AND (period_type = %s OR period_type IS NULL)"
+        params.append(period_type)
+        sql += """
+            ORDER BY
+                CASE
+                    WHEN period_type = %s THEN 0
+                    WHEN period_type IS NULL THEN 1
+                    ELSE 2
+                END,
+                fiscal_period_end DESC
+            LIMIT 1
+        """
+        params.append(period_type)
+    else:
+        sql += " ORDER BY fiscal_period_end DESC LIMIT 1"
  
     cur.execute(sql, params)
     row = cur.fetchone()
@@ -95,6 +116,7 @@ def query_financials(ticker, metric_name, year=None):
         "fiscal_period_end": str(row[0]),
         "value": float(row[1]),
         "unit": row[2],
+        "period_type": row[3],
         "metric_name": metric_name,
         "ticker": ticker,
     }
